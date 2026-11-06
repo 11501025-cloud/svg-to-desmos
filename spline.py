@@ -1,4 +1,3 @@
-from distutils.command.clean import clean
 import math
 from Vector2 import Vector2
 import time
