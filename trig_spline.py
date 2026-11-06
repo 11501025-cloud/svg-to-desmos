@@ -60,12 +60,15 @@ class TrigSpline:
         x_cos[:len(self._x_cos)] = self._x_cos
         x_sin = np.zeros(n)
         x_sin[:len(self._x_sin)] = self._x_sin
-        xs = np.real(np.fft.ifft(x_cos+x_sin*1j)) * n
+        # evaluate() uses a*cos(2πkt) + b*sin(2πkt).
+        # NumPy ifft uses the positive complex exponential, so the sine
+        # coefficients must be negated in the complex spectrum.
+        xs = np.real(np.fft.ifft(x_cos-x_sin*1j)) * n
         y_cos = np.zeros(n)
         y_cos[:len(self._y_cos)] = self._y_cos
         y_sin = np.zeros(n)
         y_sin[:len(self._y_sin)] = self._y_sin
-        ys = np.real(np.fft.ifft(y_cos+y_sin*1j)) * n
+        ys = np.real(np.fft.ifft(y_cos-y_sin*1j)) * n
         if raw:
             return (xs, ys)
         result = []
@@ -129,9 +132,12 @@ class TrigSpline:
         # shift x
         xi = np.arange(xl)
         ca, sa = np.cos(xi*a), np.sin(xi*a)
+        # Apply the same parameter shift to every harmonic.  With the
+        # a*cos(kθ) + b*sin(kθ) convention used by evaluate(), the shifted
+        # sine coefficient is b*cos(k*a) - a*sin(k*a).
         self._x_cos, self._x_sin = (
             self._x_cos*ca+self._x_sin*sa,
-            self._x_cos*sa-self._x_sin*ca)
+            -self._x_cos*sa+self._x_sin*ca)
         # shift y
         yl = max(len(self._y_cos), len(self._y_sin))
         yi = np.arange(yl)
@@ -140,7 +146,7 @@ class TrigSpline:
         self._y_sin = np.resize(self._y_sin, yl)
         self._y_cos, self._y_sin = (
             self._y_cos*ca+self._y_sin*sa,
-            self._y_cos*sa-self._y_sin*ca)
+            -self._y_cos*sa+self._y_sin*ca)
 
     def filter_lowest(self, n_waves: int) -> "TrigSpline":
         """Filter frequencies, keep lowest frequencies
