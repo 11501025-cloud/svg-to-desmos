@@ -1,0 +1,111 @@
+import json
+import tempfile
+from pathlib import Path
+
+import streamlit as st
+
+import merge_shapes
+import svg_to_desmos
+
+st.set_page_config(page_title="SVG to Desmos", page_icon="📐", layout="centered")
+st.title("SVG to Desmos")
+st.caption("將 SVG 圖形轉換成可匯入 Desmos 的數學表達式")
+st.markdown(
+    "上傳 SVG，沿用原專案的 FFT 曲線壓縮演算法，產生可貼到 Desmos "
+    "瀏覽器 Console 的 JavaScript，以及可手動貼上的文字版本。"
+)
+
+with st.sidebar:
+    st.header("轉換設定")
+    scale = st.slider(
+        "輸出解析度（數值越大通常越精細）",
+        min_value=500, max_value=8000, value=2000, step=250
+    )
+    st.caption("較高解析度會增加運算時間與輸出大小。")
+    st.caption("目前以填色（fill）圖形為主；不支援的 SVG 元素會被略過。")
+
+uploaded = st.file_uploader("選擇 SVG 檔案", type=["svg"])
+
+if uploaded is not None:
+    data = uploaded.getvalue()
+    st.write(f"檔案：**{uploaded.name}** · {len(data) / 1024:.1f} KB")
+
+    if len(data) > 10 * 1024 * 1024:
+        st.error("檔案太大，請上傳小於 10 MB 的 SVG。")
+    elif st.button("開始轉換", type="primary", use_container_width=True):
+        try:
+            with st.spinner("正在解析 SVG 並執行 FFT，請稍候…"):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    svg_path = Path(temp_dir) / "upload.svg"
+                    svg_path.write_bytes(data)
+
+                    shapes = merge_shapes.load_svg_to_trig_splines(
+                        str(svg_path), float(scale)
+                    )
+                    if not shapes:
+                        raise ValueError(
+                            "沒有找到可轉換的填色圖形。請確認 SVG 含有支援的 "
+                            "path、polygon、rect、circle 或 ellipse 元素。"
+                        )
+
+                    shapes = merge_shapes.collect_shapes_greedy(shapes)
+                    shapes = merge_shapes.split_large_shapes(shapes)
+                    common_expressions = merge_shapes.extract_common_latex(shapes)
+                    expressions = svg_to_desmos.shapes_to_desmos(
+                        shapes, common_expressions
+                    )
+
+                    txt_output = svg_to_desmos.expressions_to_txt(expressions)
+                    expressions_json = json.dumps(
+                        expressions, separators=(",", ":"), ensure_ascii=False
+                    )
+                    js_output = (
+                        "var s=Calc.getState();\n"
+                        "s['expressions']['list'] = "
+                        + expressions_json
+                        + ";\nCalc.setState(s);\n"
+                    )
+
+            st.session_state["svg_desmos_result"] = {
+                "txt": txt_output,
+                "js": js_output,
+                "shape_count": len(shapes),
+                "expression_count": len(expressions),
+            }
+        except Exception as exc:
+            st.error(f"轉換失敗：{exc}")
+            st.info(
+                "請確認 SVG 格式正確，並含有填色圖形。漸層、濾鏡、文字及"
+                "外部參照等 SVG 功能可能不受支援。"
+            )
+
+result = st.session_state.get("svg_desmos_result")
+if result:
+    st.success("轉換完成！")
+    col1, col2 = st.columns(2)
+    col1.metric("圖形群組", result["shape_count"])
+    col2.metric("Desmos 表達式", result["expression_count"])
+
+    st.subheader("下載結果")
+    c1, c2 = st.columns(2)
+    c1.download_button(
+        "下載 desmos.js", data=result["js"], file_name="desmos.js",
+        mime="text/javascript", use_container_width=True
+    )
+    c2.download_button(
+        "下載 desmos.txt", data=result["txt"], file_name="desmos.txt",
+        mime="text/plain", use_container_width=True
+    )
+
+    with st.expander("預覽 JavaScript"):
+        st.code(result["js"], language="javascript")
+    with st.expander("預覽文字表達式"):
+        st.code(result["txt"], language="text")
+
+    st.markdown(
+        "[開啟 Desmos 計算機](https://www.desmos.com/calculator)，"
+        "再將 **desmos.js** 的內容貼到瀏覽器開發者工具 Console 執行。"
+    )
+
+st.divider()
+st.caption("SVG to Desmos · FFT-based conversion · Powered by the original project")
