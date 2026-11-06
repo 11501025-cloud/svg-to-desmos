@@ -53,7 +53,7 @@ class TrigSpline:
                 for i in range(n):
                     xs.append(result[i].x)
                     ys.append(result[i].y)
-                    return (np.array(xs), np.array(ys))
+                return (np.array(xs), np.array(ys))
             return result
         # O(NlogN) using FFT
         x_cos = np.zeros(n)
