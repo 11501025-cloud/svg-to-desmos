@@ -28,9 +28,11 @@ class TrigSpline:
         y_freqs = np.fft.fft(y_coords)[:(n_points+1)//2] * (2.0/n_points)
         y_freqs[0] = np.real(y_freqs[0]) * 0.5
         self._x_cos = np.real(x_freqs)
-        self._x_sin = np.imag(x_freqs)
+        # np.fft.fft uses exp(-iθ), while evaluate() represents
+        # a*cos(θ) + b*sin(θ).  Its imaginary part is therefore -b.
+        self._x_sin = -np.imag(x_freqs)
         self._y_cos = np.real(y_freqs)
-        self._y_sin = np.imag(y_freqs)
+        self._y_sin = -np.imag(y_freqs)
 
     def evaluate(self, t: float) -> Vector2:
         """Evaluate the curve at a given parameter value"""
