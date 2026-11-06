@@ -3,16 +3,17 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
+import vtracer
 
 import merge_shapes
 import svg_to_desmos
 
-st.set_page_config(page_title="SVG to Desmos", page_icon="📐", layout="centered")
-st.title("SVG to Desmos")
-st.caption("將 SVG 圖形轉換成可匯入 Desmos 的數學表達式")
+st.set_page_config(page_title="SVG / PNG / JPG to Desmos", page_icon="📐", layout="centered")
+st.title("SVG / PNG / JPG to Desmos")
+st.caption("將 SVG 向量圖或 PNG、JPG 圖片轉換成可匯入 Desmos 的數學表達式")
 st.markdown(
-    "上傳 SVG，沿用原專案的 FFT 曲線壓縮演算法，產生可貼到 Desmos "
-    "瀏覽器 Console 的 JavaScript，以及可手動貼上的文字版本。"
+    "SVG 會沿用原本的 FFT 曲線壓縮演算法；PNG、JPG 會先描圖成 SVG，"
+    "再使用相同的轉換流程。照片及複雜漸層可能無法完美還原。"
 )
 
 with st.sidebar:
@@ -22,30 +23,58 @@ with st.sidebar:
         min_value=500, max_value=8000, value=2000, step=250
     )
     st.caption("較高解析度會增加運算時間與輸出大小。")
-    st.caption("目前以填色（fill）圖形為主；不支援的 SVG 元素會被略過。")
+    trace_mode = st.selectbox(
+        "PNG / JPG 描圖模式",
+        ["彩色（適合插畫、Logo）", "黑白（適合線稿）"],
+        help="彩色模式會保留主要色塊；黑白模式適合黑白線稿。"
+    )
+    st.caption("目前以填色圖形為主；不支援的 SVG 元素會被略過。")
 
-uploaded = st.file_uploader("選擇 SVG 檔案", type=["svg"])
+uploaded = st.file_uploader("選擇檔案", type=["svg", "png", "jpg", "jpeg"])
 
 if uploaded is not None:
     data = uploaded.getvalue()
+    suffix = Path(uploaded.name).suffix.lower()
+    is_svg = suffix == ".svg"
     st.write(f"檔案：**{uploaded.name}** · {len(data) / 1024:.1f} KB")
 
     if len(data) > 10 * 1024 * 1024:
-        st.error("檔案太大，請上傳小於 10 MB 的 SVG。")
+        st.error("檔案太大，請上傳小於 10 MB 的檔案。")
     elif st.button("開始轉換", type="primary", use_container_width=True):
         try:
-            with st.spinner("正在解析 SVG 並執行 FFT，請稍候…"):
+            with st.spinner("正在處理圖片並轉換成 Desmos 曲線，請稍候…"):
                 with tempfile.TemporaryDirectory() as temp_dir:
-                    svg_path = Path(temp_dir) / "upload.svg"
-                    svg_path.write_bytes(data)
+                    input_path = Path(temp_dir) / uploaded.name
+                    svg_path = Path(temp_dir) / "converted.svg"
+
+                    if is_svg:
+                        svg_path.write_bytes(data)
+                    else:
+                        image_format = "jpg" if suffix in [".jpg", ".jpeg"] else "png"
+                        vector_svg = vtracer.convert_raw_image_to_svg(
+                            data,
+                            img_format=image_format,
+                            colormode="binary" if trace_mode.startswith("黑白") else "color",
+                            hierarchical="stacked",
+                            mode="spline",
+                            filter_speckle=4,
+                            color_precision=6,
+                            layer_difference=16,
+                            corner_threshold=60,
+                            length_threshold=4.0,
+                            max_iterations=10,
+                            splice_threshold=45,
+                            path_precision=3,
+                        )
+                        svg_path.write_text(vector_svg, encoding="utf-8")
 
                     shapes = merge_shapes.load_svg_to_trig_splines(
                         str(svg_path), float(scale)
                     )
                     if not shapes:
                         raise ValueError(
-                            "沒有找到可轉換的填色圖形。請確認 SVG 含有支援的 "
-                            "path、polygon、rect、circle 或 ellipse 元素。"
+                            "沒有找到可轉換的填色圖形。請嘗試較簡單的圖片，"
+                            "或確認 SVG 含有支援的 path、polygon、rect、circle 或 ellipse 元素。"
                         )
 
                     shapes = merge_shapes.collect_shapes_greedy(shapes)
@@ -75,8 +104,8 @@ if uploaded is not None:
         except Exception as exc:
             st.error(f"轉換失敗：{exc}")
             st.info(
-                "請確認 SVG 格式正確，並含有填色圖形。漸層、濾鏡、文字及"
-                "外部參照等 SVG 功能可能不受支援。"
+                "請確認檔案格式正確且大小小於 10 MB。照片、漸層、細小雜訊及"
+                "複雜背景可能產生大量曲線，建議先裁切主體或使用簡單圖案。"
             )
 
 result = st.session_state.get("svg_desmos_result")
@@ -108,4 +137,4 @@ if result:
     )
 
 st.divider()
-st.caption("SVG to Desmos · FFT-based conversion · Powered by the original project")
+st.caption("SVG / PNG / JPG to Desmos · VTracer + FFT-based conversion")
