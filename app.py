@@ -59,7 +59,7 @@ if uploaded is not None:
                             img_format=image_format,
                             colormode="binary" if trace_mode.startswith("黑白") else "color",
                             hierarchical="stacked",
-                            mode="spline",
+                            mode="polygon",
                             filter_speckle=4,
                             color_precision=6,
                             layer_difference=16,
@@ -71,8 +71,11 @@ if uploaded is not None:
                         )
                         svg_path.write_text(vector_svg, encoding="utf-8")
 
+                    # Raster traces need denser contour sampling to preserve corners
+                    # and small details. Keep the original SVG sampling unchanged.
                     shapes = merge_shapes.load_svg_to_trig_splines(
-                        str(svg_path), float(scale)
+                        str(svg_path), float(scale),
+                        max_samples=512 if not is_svg else 256
                     )
                     if not shapes:
                         raise ValueError(
