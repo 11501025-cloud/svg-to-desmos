@@ -96,7 +96,7 @@ def load_svg_to_trig_splines(filename: str, width: float = None, max_samples: in
             if mag < 3.0 or (mag < 20.0 and area < 20.0):
                 continue
             tsp.phase_shift_xs1()
-            latex = tsp.to_latex(0)
+            latex = tsp.to_latex(2)
             if latex == "":
                 continue
             expressions.append({
