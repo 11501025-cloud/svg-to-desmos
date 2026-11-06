@@ -12,7 +12,7 @@ from copy import deepcopy
 
 EXPORT_SHAPE_MODE = False
 
-def load_svg_to_trig_splines(filename: str, width: float = None) -> "list[dict]":
+def load_svg_to_trig_splines(filename: str, width: float = None, max_samples: int = 256) -> "list[dict]":
     """Load an SVG file to a list of shapes in order
        Each loaded shape contains max/min, fill, trigSplines, desmos"""
     time0 = time.perf_counter()
@@ -34,7 +34,7 @@ def load_svg_to_trig_splines(filename: str, width: float = None) -> "list[dict]"
         polygons = []
         if isinstance(curve, BezierSpline):
             for spline in clean_spline(curve):
-                n = max(min(8*len(spline), 256), 32)
+                n = max(min(8*len(spline), max_samples), 32)
                 polygons.append(spline.evaluate_n(n))
         else:
             polygons.append(curve.evaluate_n(64))
