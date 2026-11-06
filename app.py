@@ -59,7 +59,7 @@ if uploaded is not None:
                             img_format=image_format,
                             colormode="binary" if trace_mode.startswith("黑白") else "color",
                             hierarchical="stacked",
-                            mode="polygon",
+                            mode="spline",
                             filter_speckle=4,
                             color_precision=6,
                             layer_difference=16,
