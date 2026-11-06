@@ -461,23 +461,28 @@ def shapes_to_desmos(shapes: "list[dict]", expressions_app: "list[dict]" = []) -
     ]
     expressions_list += expressions_app
 
-    for i in range(len(shapes)):
-        shape = shapes[i]
-        expression = join_curves(shape['desmos'])
-
-        expression['parametricDomain']['min'] = ''
-        expression['domain'] = {
-            # deprecated ?! still adding up bytes
-            'min': '0',
-            'max': expression['parametricDomain']['max']
-        }
-        expression['color'] = shape['fill']
-        expression['fill'] = True
-        expression['lines'] = False  # more bytes but much faster
-        expression['fillOpacity'] = '1'
-        expression['type'] = "expression"
-        expression['id'] = str(i+1)
-        expressions_list.append(expression)
+    # Keep each closed parametric contour as its own Desmos expression.
+    # A piecewise expression returning different points can be misparsed by Desmos.
+    expression_id = 1
+    for shape in shapes:
+        for curve in shape['desmos']:
+            expression = deepcopy(curve)
+            expression['parametricDomain'] = {
+                'min': '0',
+                'max': curve.get('parametricDomain', {}).get('max', '1')
+            }
+            expression['domain'] = {
+                'min': '0',
+                'max': expression['parametricDomain']['max']
+            }
+            expression['color'] = shape['fill']
+            expression['fill'] = True
+            expression['lines'] = False
+            expression['fillOpacity'] = '1'
+            expression['type'] = "expression"
+            expression['id'] = str(expression_id)
+            expression_id += 1
+            expressions_list.append(expression)
     return expressions_list
 
 
