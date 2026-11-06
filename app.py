@@ -3,7 +3,6 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-import vtracer
 
 import merge_shapes
 import svg_to_desmos
@@ -50,6 +49,10 @@ if uploaded is not None:
                     if is_svg:
                         svg_path.write_bytes(data)
                     else:
+                        # Load the native VTracer extension only when a raster image is converted.
+                        # This keeps the web app startup independent from VTracer's native runtime.
+                        import vtracer
+
                         image_format = "jpg" if suffix in [".jpg", ".jpeg"] else "png"
                         vector_svg = vtracer.convert_raw_image_to_svg(
                             data,
